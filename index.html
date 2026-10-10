@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0a">
+<title>Devine !</title>
+<link rel="icon" href="logo.png">
+<style>
+  :root {
+    --yellow: #ffd60a;
+    --black: #0a0a0a;
+    --grey: #1c1c1c;
+    --white: #f5f5f5;
+    --red: #ff5252;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html {
+    background: var(--black);
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    scroll-padding-top: env(safe-area-inset-top, 0px);
+  }
+  body {
+    margin: 0;
+    background: var(--black);
+    color: var(--white);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    min-height: 100vh;
+  }
+  #app {
+    max-width: 520px;
+    margin: 0 auto;
+    padding: 24px max(16px, env(safe-area-inset-right)) 40px max(16px, env(safe-area-inset-left));
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .logo { height: 120px; width: auto; border-radius: 14px; margin-bottom: 4px; }
+  h1 { color: var(--yellow); font-size: 2rem; font-weight: 800; letter-spacing: .05em; margin: 8px 0 8px; }
+  h2 { color: var(--yellow); font-size: 1.05rem; font-weight: 600; margin: 26px 0 12px; }
+  .result { font-size: 1.1rem; margin: 8px 0 0; }
+  .hint { color: rgba(245,245,245,.7); font-size: .9rem; }
+
+  /* Catégories */
+  .cats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; width: 100%; }
+  .cat {
+    font: inherit; background: none; border: 0; padding: 0; color: var(--white);
+    cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  }
+  .cat .box {
+    width: 100%; aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+    font-size: clamp(1.8rem, 9vw, 2.6rem);
+    background: var(--grey); border: 1px solid rgba(245,245,245,.3); border-radius: 16px;
+  }
+  .cat span { font-size: .8rem; }
+  .cat[aria-pressed="true"] .box { border: 3px solid var(--yellow); }
+  .cat[aria-pressed="true"] span { color: var(--yellow); font-weight: 700; }
+
+  /* Chips */
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .chip {
+    font: inherit; background: var(--grey); color: var(--white);
+    border: 1px solid rgba(245,245,245,.3); border-radius: 999px;
+    padding: 10px 20px; min-height: 44px; cursor: pointer;
+  }
+  .chip[aria-pressed="true"] { background: var(--yellow); color: #000; border-color: var(--yellow); font-weight: 700; }
+
+  /* Boutons */
+  .btn {
+    font: inherit; font-weight: 700; border: 0; border-radius: 12px;
+    min-height: 48px; padding: 12px 28px; cursor: pointer;
+  }
+  .btn.primary { background: var(--yellow); color: #000; }
+  .btn.start { margin-top: 32px; font-size: 1.1rem; }
+  .btn.opt { display: block; width: 100%; background: var(--grey); color: var(--yellow); margin: 5px 0; }
+  .btn.opt.good { background: var(--yellow); color: #000; }
+  .btn.opt.bad { background: var(--red); color: #000; }
+  .btn.opt.dim { opacity: .4; }
+  .btn:disabled { cursor: default; }
+  .link { font: inherit; background: none; border: 0; color: var(--white); cursor: pointer; padding: 8px 0; }
+  button:focus-visible, input:focus-visible { outline: 3px solid var(--white); outline-offset: 2px; }
+
+  /* Jeu */
+  .top { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 12px; }
+  .score { color: var(--yellow); font-weight: 700; }
+  .prog { color: rgba(245,245,245,.7); font-size: .9rem; min-width: 64px; text-align: right; }
+  .card {
+    background: #fff; border: 3px solid var(--yellow); border-radius: 16px; padding: 8px;
+    width: min(260px, 70vw); aspect-ratio: 1;
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+  }
+  .card img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+  .missing { color: #333; font-size: .85rem; word-break: break-all; margin: 0; }
+  .fbwrap { min-height: 3.2em; display: flex; align-items: center; justify-content: center; margin: 12px 0 4px; }
+  .fb { margin: 0; font-weight: 700; }
+  .fb.good { color: var(--yellow); }
+  .fb.bad { color: var(--red); }
+  .opts, .text { width: 100%; }
+  .text input {
+    font: inherit; font-size: 16px; width: 100%; background: transparent; color: var(--white);
+    border: 1px solid rgba(245,245,245,.4); border-radius: 10px; padding: 14px; margin-bottom: 12px;
+  }
+  .text input:focus { border-color: var(--yellow); }
+  .text input:disabled { opacity: .7; }
+  .next { margin-top: 14px; }
+</style>
+</head>
+<body>
+<div id="app"><p class="hint">Chargement…</p></div>
+
+<script>
+const app = document.getElementById('app');
+
+const CATS = [
+  { key: null,         label: 'Tout',       emoji: '🍿' },
+  { key: 'film',       label: 'Film',       emoji: '🎬' },
+  { key: 'serie',      label: 'Série',      emoji: '📺' },
+  { key: 'jeux_video', label: 'Jeux vidéo', emoji: '🎮' },
+];
+const MODES = [
+  { key: 'qcm',   label: 'QCM' },
+  { key: 'texte', label: 'Texte' },
+  { key: 'mixte', label: 'Mixte' },
+];
+const KNOWN = ['film', 'serie', 'jeux_video'];
+
+let allItems = [];
+let homeMsg = '';
+const sel = { category: null, mode: 'mixte' };
+let g = null; // partie en cours
+
+/* ---------- Outils ---------- */
+function h(tag, attrs = {}, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+    else if (v === true) el.setAttribute(k, '');
+    else if (v !== false && v != null) el.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) {
+    if (kid == null || kid === false) continue;
+    el.append(kid);
+  }
+  return el;
+}
+
+// Remplace le contenu de la page (ignore les éléments null)
+function show(...nodes) {
+  app.replaceChildren(...nodes.flat().filter(Boolean));
+}
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// Ignore accents, majuscules, ponctuation et espaces ("X-Men" = "x men" = "xmen")
+function norm(s) {
+  return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+}
+
+function catKey(s) {
+  return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().trim().replace(/[\s-]+/g, '_');
+}
+
+/* ---------- Chargement ---------- */
+async function init() {
+  try {
+    const res = await fetch('data.json', { cache: 'no-store' });
+    if (!res.ok) throw new Error('data.json introuvable (HTTP ' + res.status + ')');
+    const data = await res.json();
+    allItems = data
+      .map(o => {
+        let c = catKey(o.category);
+        if (!KNOWN.includes(c)) c = 'film';
+        return { file: o.file, title: o.title, category: c };
+      })
+      .filter(i => i.file && i.title);
+    renderHome();
+  } catch (e) {
+    renderError(e);
+  }
+}
+
+/* ---------- Logique de jeu ---------- */
+function start() {
+  const pool = allItems.filter(i => sel.category === null || i.category === sel.category);
+  if (!pool.length) {
+    homeMsg = 'Aucune image dans cette catégorie pour le moment.';
+    renderHome();
+    return;
+  }
+  homeMsg = '';
+  g = { queue: shuffle(pool), n: pool.length, score: 0, total: 0,
+        current: null, answered: false, correct: false, picked: null };
+  nextQuestion();
+}
+
+function nextQuestion() {
+  const item = g.queue.shift();
+  const mode = sel.mode === 'mixte' ? (Math.random() < 0.5 ? 'qcm' : 'texte') : sel.mode;
+  g.current = { item, mode, options: mode === 'qcm' ? buildOptions(item) : [] };
+  g.answered = false;
+  g.picked = null;
+  g.correct = false;
+  window.scrollTo(0, 0);
+  renderGame();
+}
+
+function buildOptions(item) {
+  const same = allItems.filter(i => i.category === item.category && i.title !== item.title);
+  const pool = same.length >= 3 ? same : allItems.filter(i => i.title !== item.title);
+  const wrongs = shuffle([...new Set(pool.map(i => i.title))]).slice(0, 3);
+  return shuffle([...wrongs, item.title]);
+}
+
+function answer(value) {
+  if (g.answered) return;
+  g.correct = norm(value) === norm(g.current.item.title);
+  g.picked = value;
+  g.answered = true;
+  g.total++;
+  if (g.correct) g.score++;
+  renderGame();
+}
+
+function finish() {
+  homeMsg = 'Partie terminée : ' + g.score + ' / ' + g.total;
+  g = null;
+  renderHome();
+}
+
+/* ---------- Écrans ---------- */
+function renderHome() {
+  show(
+    h('img', { class: 'logo', src: 'logo.png', alt: '' }),
+    h('h1', {}, 'DEVINE !'),
+    homeMsg ? h('p', { class: 'result' }, homeMsg) : null,
+
+    h('h2', {}, 'Catégorie'),
+    h('div', { class: 'cats' }, CATS.map(c =>
+      h('button', {
+        class: 'cat',
+        'aria-pressed': String(sel.category === c.key),
+        onclick: () => { sel.category = c.key; renderHome(); },
+      },
+        h('div', { class: 'box' }, c.emoji),
+        h('span', {}, c.label))
+    )),
+
+    h('h2', {}, 'Mode de réponse'),
+    h('div', { class: 'chips' }, MODES.map(m =>
+      h('button', {
+        class: 'chip',
+        'aria-pressed': String(sel.mode === m.key),
+        onclick: () => { sel.mode = m.key; renderHome(); },
+      }, m.label)
+    )),
+
+    h('button', { class: 'btn primary start', onclick: start }, 'ACTION !')
+  );
+}
+
+function renderGame() {
+  const q = g.current;
+  const it = q.item;
+
+  const img = h('img', { src: 'images/' + encodeURIComponent(it.file), alt: 'Image à deviner' });
+  img.addEventListener('error', () => {
+    img.replaceWith(h('p', { class: 'missing' }, 'Image introuvable : ' + it.file));
+  });
+
+  let input = null;
+  let body;
+
+  if (q.mode === 'qcm') {
+    body = h('div', { class: 'opts' }, q.options.map(o => {
+      let cls = 'btn opt';
+      if (g.answered) {
+        if (norm(o) === norm(it.title)) cls += ' good';
+        else if (o === g.picked) cls += ' bad';
+        else cls += ' dim';
+      }
+      return h('button', { class: cls, disabled: g.answered, onclick: () => answer(o) }, o);
+    }));
+  } else {
+    input = h('input', {
+      type: 'text', placeholder: 'Ta réponse', autocomplete: 'off',
+      autocapitalize: 'off', spellcheck: 'false',
+      disabled: g.answered, value: g.answered ? g.picked : '',
+    });
+    const submit = () => { if (input.value.trim()) answer(input.value); };
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); submit(); }
+    });
+    body = h('div', { class: 'text' },
+      input,
+      g.answered ? null : h('button', { class: 'btn primary', onclick: submit }, 'Valider'));
+  }
+
+  let fb = h('p', { class: 'fb' });
+  if (g.answered) {
+    fb = g.correct
+      ? h('p', { class: 'fb good' }, '✅ Bonne réponse !')
+      : h('p', { class: 'fb bad' }, '❌ Raté ! C\u2019était : ' + it.title);
+  }
+
+  const next = g.answered
+    ? h('button', { class: 'btn primary next', onclick: g.queue.length ? nextQuestion : finish },
+        g.queue.length ? 'Suivant' : 'Voir le score')
+    : null;
+
+  show(
+    h('div', { class: 'top' },
+      h('button', { class: 'link', onclick: () => { g = null; homeMsg = ''; renderHome(); } }, '← Menu'),
+      h('span', { class: 'score' }, 'Score : ' + g.score + ' / ' + g.total),
+      h('span', { class: 'prog' }, (g.total + (g.answered ? 0 : 1)) + ' / ' + g.n)),
+    h('div', { class: 'card' }, img),
+    h('div', { class: 'fbwrap' }, fb),
+    body,
+    next
+  );
+
+  if (next) {
+    next.focus({ preventScroll: true });
+    next.scrollIntoView({ block: 'nearest' });
+  } else if (input && window.matchMedia('(hover: hover)').matches) {
+    input.focus();
+  }
+}
+
+function renderError(e) {
+  show(
+    h('h1', {}, 'Oups'),
+    h('p', {}, 'Impossible de charger la liste des images (data.json).'),
+    h('p', { class: 'hint' },
+      'Si tu as ouvert index.html directement depuis ton ordinateur, c\u2019est normal : ' +
+      'le jeu doit être ouvert via un site (GitHub Pages) ou un serveur local.'),
+    h('p', { class: 'hint' }, String(e && e.message ? e.message : e))
+  );
+}
+
+init();
+</script>
+</body>
+</html>
