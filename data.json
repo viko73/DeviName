@@ -19,8 +19,8 @@
   { "file": "batman.png", "title": "Batman, the dark knight", "category": "film" },
   { "file": "resident_evil.png", "title": "Resident Evil", "category": "Jeux vidéo" },
   { "file": "sonic.png", "title": "Sonic", "category": "Jeux vidéo" },
-  { "file": "jurassik_park.png", "title": "Jurassik Park", "category": "Jeux vidéo" },
-  { "file": "silent_hill.png", "title": "Jurassik Park", "category": "film" },
+  { "file": "silent_hill.png", "title": "Silent hill", "category": "Jeux vidéo" },
+  { "file": "jurassik_park.png", "title": "Jurassik Park", "category": "film" },
   { "file": "gravity_falls.png", "title": "Gravity falls", "category": "serie" },
   { "file": "avatar_air.png", "title": "avatar, le dernier maître de l'air", "category": "serie" },
   { "file": "got.png", "title": "Game of thrones", "category": "serie" }
