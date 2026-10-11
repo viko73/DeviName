@@ -124,8 +124,8 @@ const INTRO = [
   'Choisis une catégorie, puis tape ta réponse : les accents, les majuscules et la ponctuation n\u2019ont pas d\u2019importance.',
 ];
 
-// Nombre d'erreurs permises : l'erreur suivante fait perdre la partie.
-// (Mets 1 pour que la 2e erreur fasse perdre, 0 pour perdre dès la 1re.)
+// Nombre d'erreurs permises PAR IMAGE : une fois atteint, la réponse est dévoilée
+// et on passe à l'image suivante (2 = deux essais par image).
 const MAX_ERREURS = 2;
 
 let allItems = [];
@@ -201,42 +201,48 @@ function start() {
     return;
   }
   homeMsg = '';
-  g = { queue: shuffle(pool), n: pool.length, score: 0, errors: 0, lost: false,
-        current: null, answered: false, correct: false, picked: null };
+  g = { queue: shuffle(pool), n: pool.length, score: 0,
+        current: null, errors: 0, answered: false, correct: false, picked: null, lastTry: '' };
   nextQuestion();
 }
 
 function nextQuestion() {
   g.current = g.queue.shift();
+  g.errors = 0;          // les erreurs sont comptées image par image
   g.answered = false;
-  g.picked = null;
   g.correct = false;
+  g.picked = null;
+  g.lastTry = '';
   window.scrollTo(0, 0);
   renderGame();
 }
 
 function answer(value) {
   if (g.answered) return;
-  g.correct = norm(value) === norm(g.current.title);
-  g.picked = value;
-  g.answered = true;
-  if (g.correct) {
+  if (norm(value) === norm(g.current.title)) {
+    g.correct = true;
+    g.answered = true;
+    g.picked = value;
     g.score++;
   } else {
     g.errors++;
-    if (g.errors > MAX_ERREURS) g.lost = true;
+    g.lastTry = value;
+    if (g.errors >= MAX_ERREURS) {   // trop d'erreurs : on dévoile la réponse
+      g.answered = true;
+      g.picked = value;
+    }
   }
   renderGame();
 }
 
-// Passe à la suite : question suivante, ou fin de partie (perdue ou terminée)
+// Question suivante, ou fin de partie s'il n'y en a plus
 function goNext() {
-  if (g.lost || !g.queue.length) finish();
+  if (!g.queue.length) finish();
   else nextQuestion();
 }
 
 function finish() {
-  homeMsg = (g.lost ? '💥 Perdu ! ' : '🏆 Gagné ! ') + 'Score : ' + g.score + ' / ' + g.n;
+  homeMsg = '🏁 Partie terminée ! Score : ' + g.score + ' / ' + g.n;
   g = null;
   renderHome();
 }
@@ -252,8 +258,8 @@ function renderHome() {
     h('div', { class: 'intro' },
       INTRO.map(t => h('p', {}, t)),
       h('p', {},
-        'Tu as droit à ' + MAX_ERREURS + (MAX_ERREURS > 1 ? ' erreurs' : ' erreur') +
-        ' : la suivante met fin à la partie. Bonne chance !')),
+        'Pour chaque image, tu as droit à ' + MAX_ERREURS + (MAX_ERREURS > 1 ? ' erreurs' : ' erreur') +
+        ' (' + '❤️'.repeat(MAX_ERREURS) + ') : ensuite, la réponse t\u2019est dévoilée. Bonne chance !')),
 
     h('h2', {}, 'Catégorie'),
     h('div', { class: 'cats' }, CATS.map(c =>
@@ -272,7 +278,7 @@ function renderHome() {
 
 function renderGame() {
   const it = g.current;
-  const left = Math.max(0, MAX_ERREURS - g.errors);
+  const left = Math.max(0, MAX_ERREURS - g.errors);   // essais restants pour cette image
 
   const img = h('img', { src: 'images/' + encodeURIComponent(it.file), alt: 'Image à deviner' });
   img.addEventListener('error', () => {
@@ -284,7 +290,7 @@ function renderGame() {
     autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false',
     class: g.answered ? 'locked' : null,
     'aria-label': 'Ta réponse',
-    value: g.answered ? g.picked : '',
+    value: g.answered ? g.picked : g.lastTry,
   });
   const submit = () => { if (input.value.trim()) answer(input.value); };
   input.addEventListener('keydown', e => {
@@ -292,35 +298,33 @@ function renderGame() {
     e.preventDefault();
     if (g.answered) goNext(); else submit();
   });
-  // Une fois la réponse donnée, le champ ne peut plus être modifié
+  // Une fois l'image terminée, le champ ne peut plus être modifié
   input.addEventListener('input', () => { if (g.answered) input.value = g.picked; });
 
   const body = h('div', { class: 'text' },
     input,
     g.answered ? null : h('button', { class: 'btn primary', onclick: submit }, 'Valider'));
 
-  let fb;
+  let fb = [];
   if (g.answered) {
-    fb = g.correct
-      ? [h('p', { class: 'fb good' }, '✅ Bonne réponse !')]
-      : [h('p', { class: 'fb bad' }, '❌ Raté ! C\u2019était : ' + it.title)];
-    if (g.lost) fb.push(h('p', { class: 'fb bad' }, '💥 Plus aucune erreur permise : c\u2019est perdu !'));
-  } else if (left === 0) {
-    fb = [h('p', { class: 'fb bad' }, '⚠️ Dernière chance !')];
-  } else {
-    fb = [];
+    fb = [g.correct
+      ? h('p', { class: 'fb good' }, '✅ Bonne réponse !')
+      : h('p', { class: 'fb bad' }, '❌ Raté ! C\u2019était : ' + it.title)];
+  } else if (g.errors > 0) {
+    fb = [h('p', { class: 'fb bad' },
+      '❌ Raté ! Il te reste ' + left + (left > 1 ? ' essais.' : ' essai.'))];
   }
 
   const next = g.answered
     ? h('button', { class: 'btn primary next', onclick: goNext },
-        g.lost ? 'Terminer' : (g.queue.length ? 'Suivant' : 'Voir le score'))
+        g.queue.length ? 'Suivant' : 'Voir le score')
     : null;
 
   show(
     h('div', { class: 'top' },
       h('button', { class: 'link', onclick: () => { g = null; homeMsg = ''; renderHome(); } }, '← Menu'),
       h('span', { class: 'score' }, 'Score : ' + g.score + ' / ' + g.n),
-      h('span', { class: 'errs', 'aria-label': 'Erreurs encore permises : ' + left },
+      h('span', { class: 'errs', 'aria-label': 'Essais restants pour cette image : ' + left },
         '❤️'.repeat(left) + '🖤'.repeat(MAX_ERREURS - left))),
     h('div', { class: 'card' }, img),
     h('div', { class: 'fbwrap' }, fb),
@@ -329,6 +333,7 @@ function renderGame() {
   );
 
   input.focus();
+  if (!g.answered && g.lastTry) input.select();   // on peut corriger ou retaper directement
   if (next) next.scrollIntoView({ block: 'nearest' });
 }
 
