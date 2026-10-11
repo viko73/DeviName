@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0a0a0a">
-<title>Devine !</title>
+<title>Devine ! – Quiz d'images minimalistes</title>
 <link rel="icon" href="logo.png">
 <style>
   :root {
@@ -41,7 +41,7 @@
   .logo { height: 120px; width: auto; border-radius: 14px; margin-bottom: 4px; }
   h1 { color: var(--yellow); font-size: 2rem; font-weight: 800; letter-spacing: .05em; margin: 8px 0 8px; }
   h2 { color: var(--yellow); font-size: 1.05rem; font-weight: 600; margin: 26px 0 12px; }
-  .result { font-size: 1.1rem; margin: 8px 0 0; }
+  .result { font-size: 1.15rem; font-weight: 700; margin: 12px 0 0; }
   .hint { color: rgba(245,245,245,.7); font-size: .9rem; }
 
   /* Catégories */
@@ -92,7 +92,14 @@
   }
   .text input:focus { border-color: var(--yellow); }
   .text input.locked { opacity: .7; }
-  .rules { margin-top: 28px; }
+  .tagline { color: rgba(245,245,245,.85); font-size: 1.05rem; margin: 0 0 4px; }
+  .intro {
+    width: 100%; text-align: left; margin-top: 18px; padding: 14px 16px;
+    background: var(--grey); border: 1px solid rgba(245,245,245,.2);
+    border-left: 4px solid var(--yellow); border-radius: 12px;
+  }
+  .intro p { margin: 0 0 8px; line-height: 1.5; }
+  .intro p:last-child { margin-bottom: 0; }
   .next { margin-top: 14px; }
 </style>
 </head>
@@ -109,6 +116,13 @@ const CATS = [
   { key: 'jeux_video', label: 'Jeux vidéo', emoji: '🎮' },
 ];
 const KNOWN = ['film', 'serie', 'jeux_video'];
+
+// ----- Textes de l'écran d'accueil (modifie-les librement) -----
+const TAGLINE = 'Reconnais-les en une seule image !';
+const INTRO = [
+  'Des films, des séries et des jeux vidéo ont été réduits à une image minimaliste. À toi de retrouver leur titre !',
+  'Choisis une catégorie, puis tape ta réponse : les accents, les majuscules et la ponctuation n\u2019ont pas d\u2019importance.',
+];
 
 // Nombre d'erreurs permises : l'erreur suivante fait perdre la partie.
 // (Mets 1 pour que la 2e erreur fasse perdre, 0 pour perdre dès la 1re.)
@@ -232,7 +246,14 @@ function renderHome() {
   show(
     h('img', { class: 'logo', src: 'logo.png', alt: '' }),
     h('h1', {}, 'DEVINE !'),
+    h('p', { class: 'tagline' }, TAGLINE),
     homeMsg ? h('p', { class: 'result' }, homeMsg) : null,
+
+    h('div', { class: 'intro' },
+      INTRO.map(t => h('p', {}, t)),
+      h('p', {},
+        'Tu as droit à ' + MAX_ERREURS + (MAX_ERREURS > 1 ? ' erreurs' : ' erreur') +
+        ' : la suivante met fin à la partie. Bonne chance !')),
 
     h('h2', {}, 'Catégorie'),
     h('div', { class: 'cats' }, CATS.map(c =>
@@ -245,9 +266,6 @@ function renderHome() {
         h('span', {}, c.label))
     )),
 
-    h('p', { class: 'hint rules' },
-      'Tu as droit à ' + MAX_ERREURS + (MAX_ERREURS > 1 ? ' erreurs' : ' erreur') +
-      '. La suivante met fin à la partie !'),
     h('button', { class: 'btn primary start', onclick: start }, 'ACTION !')
   );
 }
