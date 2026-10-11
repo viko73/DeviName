@@ -59,15 +59,6 @@
   .cat[aria-pressed="true"] .box { border: 3px solid var(--yellow); }
   .cat[aria-pressed="true"] span { color: var(--yellow); font-weight: 700; }
 
-  /* Chips */
-  .chips { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
-  .chip {
-    font: inherit; background: var(--grey); color: var(--white);
-    border: 1px solid rgba(245,245,245,.3); border-radius: 999px;
-    padding: 10px 20px; min-height: 44px; cursor: pointer;
-  }
-  .chip[aria-pressed="true"] { background: var(--yellow); color: #000; border-color: var(--yellow); font-weight: 700; }
-
   /* Boutons */
   .btn {
     font: inherit; font-weight: 700; border: 0; border-radius: 12px;
@@ -75,10 +66,6 @@
   }
   .btn.primary { background: var(--yellow); color: #000; }
   .btn.start { margin-top: 32px; font-size: 1.1rem; }
-  .btn.opt { display: block; width: 100%; background: var(--grey); color: var(--yellow); margin: 5px 0; }
-  .btn.opt.good { background: var(--yellow); color: #000; }
-  .btn.opt.bad { background: var(--red); color: #000; }
-  .btn.opt.dim { opacity: .4; }
   .btn:disabled { cursor: default; }
   .link { font: inherit; background: none; border: 0; color: var(--white); cursor: pointer; padding: 8px 0; }
   button:focus-visible, input:focus-visible { outline: 3px solid var(--white); outline-offset: 2px; }
@@ -86,25 +73,26 @@
   /* Jeu */
   .top { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 12px; }
   .score { color: var(--yellow); font-weight: 700; }
-  .prog { color: rgba(245,245,245,.7); font-size: .9rem; min-width: 64px; text-align: right; }
+  .errs { font-size: 1.1rem; letter-spacing: .1em; min-width: 64px; text-align: right; }
   .card {
     background: #fff; border: 3px solid var(--yellow); border-radius: 16px; padding: 8px;
-    width: min(260px, 70vw); aspect-ratio: 1;
+    width: min(240px, 62vw); aspect-ratio: 1;
     display: flex; align-items: center; justify-content: center; overflow: hidden;
   }
   .card img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
   .missing { color: #333; font-size: .85rem; word-break: break-all; margin: 0; }
-  .fbwrap { min-height: 3.2em; display: flex; align-items: center; justify-content: center; margin: 12px 0 4px; }
+  .fbwrap { min-height: 3.2em; display: flex; flex-direction: column; gap: 4px; align-items: center; justify-content: center; margin: 12px 0 4px; }
   .fb { margin: 0; font-weight: 700; }
   .fb.good { color: var(--yellow); }
   .fb.bad { color: var(--red); }
-  .opts, .text { width: 100%; }
+  .text { width: 100%; }
   .text input {
     font: inherit; font-size: 16px; width: 100%; background: transparent; color: var(--white);
     border: 1px solid rgba(245,245,245,.4); border-radius: 10px; padding: 14px; margin-bottom: 12px;
   }
   .text input:focus { border-color: var(--yellow); }
-  .text input:disabled { opacity: .7; }
+  .text input.locked { opacity: .7; }
+  .rules { margin-top: 28px; }
   .next { margin-top: 14px; }
 </style>
 </head>
@@ -120,16 +108,15 @@ const CATS = [
   { key: 'serie',      label: 'Série',      emoji: '📺' },
   { key: 'jeux_video', label: 'Jeux vidéo', emoji: '🎮' },
 ];
-const MODES = [
-  { key: 'qcm',   label: 'QCM' },
-  { key: 'texte', label: 'Texte' },
-  { key: 'mixte', label: 'Mixte' },
-];
 const KNOWN = ['film', 'serie', 'jeux_video'];
+
+// Nombre d'erreurs permises : l'erreur suivante fait perdre la partie.
+// (Mets 1 pour que la 2e erreur fasse perdre, 0 pour perdre dès la 1re.)
+const MAX_ERREURS = 2;
 
 let allItems = [];
 let homeMsg = '';
-const sel = { category: null, mode: 'mixte' };
+const sel = { category: null };
 let g = null; // partie en cours
 
 /* ---------- Outils ---------- */
@@ -200,15 +187,13 @@ function start() {
     return;
   }
   homeMsg = '';
-  g = { queue: shuffle(pool), n: pool.length, score: 0, total: 0,
+  g = { queue: shuffle(pool), n: pool.length, score: 0, errors: 0, lost: false,
         current: null, answered: false, correct: false, picked: null };
   nextQuestion();
 }
 
 function nextQuestion() {
-  const item = g.queue.shift();
-  const mode = sel.mode === 'mixte' ? (Math.random() < 0.5 ? 'qcm' : 'texte') : sel.mode;
-  g.current = { item, mode, options: mode === 'qcm' ? buildOptions(item) : [] };
+  g.current = g.queue.shift();
   g.answered = false;
   g.picked = null;
   g.correct = false;
@@ -216,25 +201,28 @@ function nextQuestion() {
   renderGame();
 }
 
-function buildOptions(item) {
-  const same = allItems.filter(i => i.category === item.category && i.title !== item.title);
-  const pool = same.length >= 3 ? same : allItems.filter(i => i.title !== item.title);
-  const wrongs = shuffle([...new Set(pool.map(i => i.title))]).slice(0, 3);
-  return shuffle([...wrongs, item.title]);
-}
-
 function answer(value) {
   if (g.answered) return;
-  g.correct = norm(value) === norm(g.current.item.title);
+  g.correct = norm(value) === norm(g.current.title);
   g.picked = value;
   g.answered = true;
-  g.total++;
-  if (g.correct) g.score++;
+  if (g.correct) {
+    g.score++;
+  } else {
+    g.errors++;
+    if (g.errors > MAX_ERREURS) g.lost = true;
+  }
   renderGame();
 }
 
+// Passe à la suite : question suivante, ou fin de partie (perdue ou terminée)
+function goNext() {
+  if (g.lost || !g.queue.length) finish();
+  else nextQuestion();
+}
+
 function finish() {
-  homeMsg = 'Partie terminée : ' + g.score + ' / ' + g.total;
+  homeMsg = (g.lost ? '💥 Perdu ! ' : '🏆 Gagné ! ') + 'Score : ' + g.score + ' / ' + g.n;
   g = null;
   renderHome();
 }
@@ -257,85 +245,73 @@ function renderHome() {
         h('span', {}, c.label))
     )),
 
-    h('h2', {}, 'Mode de réponse'),
-    h('div', { class: 'chips' }, MODES.map(m =>
-      h('button', {
-        class: 'chip',
-        'aria-pressed': String(sel.mode === m.key),
-        onclick: () => { sel.mode = m.key; renderHome(); },
-      }, m.label)
-    )),
-
+    h('p', { class: 'hint rules' },
+      'Tu as droit à ' + MAX_ERREURS + (MAX_ERREURS > 1 ? ' erreurs' : ' erreur') +
+      '. La suivante met fin à la partie !'),
     h('button', { class: 'btn primary start', onclick: start }, 'ACTION !')
   );
 }
 
 function renderGame() {
-  const q = g.current;
-  const it = q.item;
+  const it = g.current;
+  const left = Math.max(0, MAX_ERREURS - g.errors);
 
   const img = h('img', { src: 'images/' + encodeURIComponent(it.file), alt: 'Image à deviner' });
   img.addEventListener('error', () => {
     img.replaceWith(h('p', { class: 'missing' }, 'Image introuvable : ' + it.file));
   });
 
-  let input = null;
-  let body;
+  const input = h('input', {
+    type: 'text', placeholder: 'Ta réponse', autocomplete: 'off',
+    autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false',
+    class: g.answered ? 'locked' : null,
+    'aria-label': 'Ta réponse',
+    value: g.answered ? g.picked : '',
+  });
+  const submit = () => { if (input.value.trim()) answer(input.value); };
+  input.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' || e.repeat) return;
+    e.preventDefault();
+    if (g.answered) goNext(); else submit();
+  });
+  // Une fois la réponse donnée, le champ ne peut plus être modifié
+  input.addEventListener('input', () => { if (g.answered) input.value = g.picked; });
 
-  if (q.mode === 'qcm') {
-    body = h('div', { class: 'opts' }, q.options.map(o => {
-      let cls = 'btn opt';
-      if (g.answered) {
-        if (norm(o) === norm(it.title)) cls += ' good';
-        else if (o === g.picked) cls += ' bad';
-        else cls += ' dim';
-      }
-      return h('button', { class: cls, disabled: g.answered, onclick: () => answer(o) }, o);
-    }));
-  } else {
-    input = h('input', {
-      type: 'text', placeholder: 'Ta réponse', autocomplete: 'off',
-      autocapitalize: 'off', spellcheck: 'false',
-      disabled: g.answered, value: g.answered ? g.picked : '',
-    });
-    const submit = () => { if (input.value.trim()) answer(input.value); };
-    input.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); submit(); }
-    });
-    body = h('div', { class: 'text' },
-      input,
-      g.answered ? null : h('button', { class: 'btn primary', onclick: submit }, 'Valider'));
-  }
+  const body = h('div', { class: 'text' },
+    input,
+    g.answered ? null : h('button', { class: 'btn primary', onclick: submit }, 'Valider'));
 
-  let fb = h('p', { class: 'fb' });
+  let fb;
   if (g.answered) {
     fb = g.correct
-      ? h('p', { class: 'fb good' }, '✅ Bonne réponse !')
-      : h('p', { class: 'fb bad' }, '❌ Raté ! C\u2019était : ' + it.title);
+      ? [h('p', { class: 'fb good' }, '✅ Bonne réponse !')]
+      : [h('p', { class: 'fb bad' }, '❌ Raté ! C\u2019était : ' + it.title)];
+    if (g.lost) fb.push(h('p', { class: 'fb bad' }, '💥 Plus aucune erreur permise : c\u2019est perdu !'));
+  } else if (left === 0) {
+    fb = [h('p', { class: 'fb bad' }, '⚠️ Dernière chance !')];
+  } else {
+    fb = [];
   }
 
   const next = g.answered
-    ? h('button', { class: 'btn primary next', onclick: g.queue.length ? nextQuestion : finish },
-        g.queue.length ? 'Suivant' : 'Voir le score')
+    ? h('button', { class: 'btn primary next', onclick: goNext },
+        g.lost ? 'Terminer' : (g.queue.length ? 'Suivant' : 'Voir le score'))
     : null;
 
   show(
     h('div', { class: 'top' },
       h('button', { class: 'link', onclick: () => { g = null; homeMsg = ''; renderHome(); } }, '← Menu'),
-      h('span', { class: 'score' }, 'Score : ' + g.score + ' / ' + g.total),
-      h('span', { class: 'prog' }, (g.total + (g.answered ? 0 : 1)) + ' / ' + g.n)),
+      h('span', { class: 'score' }, 'Score : ' + g.score + ' / ' + g.n),
+      h('span', { class: 'errs', 'aria-label': 'Erreurs encore permises : ' + left },
+        '❤️'.repeat(left) + '🖤'.repeat(MAX_ERREURS - left))),
     h('div', { class: 'card' }, img),
     h('div', { class: 'fbwrap' }, fb),
     body,
     next
   );
 
-  if (next) {
-    next.focus({ preventScroll: true });
-    next.scrollIntoView({ block: 'nearest' });
-  } else if (input && window.matchMedia('(hover: hover)').matches) {
-    input.focus();
-  }
+  input.focus();
+  if (next) next.scrollIntoView({ block: 'nearest' });
 }
 
 function renderError(e) {
